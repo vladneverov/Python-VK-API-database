@@ -1,48 +1,55 @@
-# 1. Создать приложение VK Standalone
-# 2. Записать ID приложения
-# 3. Получить по ссылке токен и разрешить права
-# Можно и сервисный ключ приложения, но там глюки
-
-# ID приложения	7350440
-# для Standalone приложения - redirect_uri=https://oauth.vk.com/blank.html
-# {TOKEN} = https://oauth.vk.com/authorize?client_id={APP_ID}&display=page&redirect_uri=https://oauth.vk.com/blank.html&scope=friends,photos,audio,video,docs,notes,pages,status,wall,groups,notifications,offline&response_type=token
-# https://api.vk.com/method/database.getCountries?access_token={TOKEN}&need_all=1&v=5.103
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+import sys
+from termcolor import colored
 import requests
-
-token= '23ac56974452faa4d444bc64f066194d283acdad30b2038a442e6abe0566a1dd85fa4334d2df8008a5b39'
-proxies = {
-    'http': 'http://200.73.128.5:8080',
-    'https': 'http://200.73.128.5:8080',
-}
+from configs.config import *
+from configs.DBConfig import *
  
 def main():
-    r = requests.get('https://api.vk.com/method/database.getCountries', params={
-        'need_all': 1,'v': 5.103,'access_token': token
-    }, proxies=proxies)
-    countries = r.json()["response"]["items"]
+    # Создать базу "vkdb" если не существует
+    cursor.execute("CREATE DATABASE IF NOT EXISTS vkdb")
 
-    for country in countries:
-        print(country["title"])
+    # Удалить таблицу "countries" если существует
+    cursor.execute("DROP TABLE IF EXISTS countries")
+
+    # Создать таблицу "countries" если не существует
+    cursor.execute("CREATE TABLE IF NOT EXISTS countries (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255))")
+
+    listCountries = []
+    listCountries.reverse()
+
+    def getCountries():
+        r = requests.get('https://api.vk.com/method/database.getCountries', params={
+            'need_all': 1, 'lang': 'ru', 'count': 1000, 'v': 5.103, 'access_token': token
+        }, proxies=proxies)
+        
+        return r.json()["response"]["items"]
+    
+    countries = getCountries()
+    lenCountries = len(countries)
+
+    file = open('txtFiles/countries.txt', 'w', encoding='utf-8')
+
+    for index, country in enumerate(countries):
+        
+        # Записать списком из кортежей для sql запроса
+        listCountries.append( (country["title"], ) )
+
+        # Если это последняя строка
+        # Убрать перенос \n
+        if index == lenCountries - 1:
+           file.write(country["title"])
+        else:
+           # Записать в txt файл
+           file.write(country["title"] + "\n")
+
+    file.close()
+
+    # Добавить все страны в базу
+    sql = "INSERT INTO countries (title) VALUES (%s)"
+    cursor.executemany(sql, listCountries)
+    db.commit()
+
+    print(cursor.rowcount, colored("Страны были успешно добавлены!", "green"))
  
 if __name__ == '__main__':
     main()
